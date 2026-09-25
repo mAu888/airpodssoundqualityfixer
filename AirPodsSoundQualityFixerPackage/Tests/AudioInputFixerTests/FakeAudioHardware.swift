@@ -5,6 +5,7 @@ import CoreAudio
 final class FakeAudioHardware: AudioHardware {
   var devices: [AudioDevice]
   var defaultInput: AudioDeviceID?
+  var rejectedDeviceIDs: Set<AudioDeviceID> = []
   private(set) var setDefaultInputCalls: [AudioDeviceID] = []
   private var onChange: (@MainActor () -> Void)?
 
@@ -17,9 +18,11 @@ final class FakeAudioHardware: AudioHardware {
 
   func defaultInputDeviceID() -> AudioDeviceID? { defaultInput }
 
-  func setDefaultInputDevice(_ id: AudioDeviceID) {
+  func setDefaultInputDevice(_ id: AudioDeviceID) -> Bool {
     setDefaultInputCalls.append(id)
+    guard !rejectedDeviceIDs.contains(id) else { return false }
     defaultInput = id
+    return true
   }
 
   func observeChanges(_ onChange: @escaping @MainActor () -> Void) -> AudioHardwareObservation {

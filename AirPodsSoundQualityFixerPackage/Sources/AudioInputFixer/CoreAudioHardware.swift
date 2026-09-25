@@ -18,29 +18,47 @@ public struct CoreAudioHardware: AudioHardware {
     return status == noErr && deviceID != kAudioObjectUnknown ? deviceID : nil
   }
 
-  public func setDefaultInputDevice(_ id: AudioDeviceID) {
+  public func setDefaultInputDevice(_ id: AudioDeviceID) -> Bool {
     var address = Self.address(kAudioHardwarePropertyDefaultInputDevice)
     var deviceID = id
-    AudioObjectSetPropertyData(
+    let status = AudioObjectSetPropertyData(
       Self.systemObject, &address, 0, nil, UInt32(MemoryLayout<AudioDeviceID>.size), &deviceID
     )
+    return status == noErr && defaultInputDeviceID() == id
   }
 
+  // AudioObjectRemovePropertyListenerBlock leaves a listener added from Swift installed, even when
+  // the same stored @convention(block) value is passed to both calls. The function-pointer API
+  // identifies a listener by its context pointer, which here is a registry key instead of an object
+  // address, so a notification already in flight during removal finds no handler.
   public func observeChanges(_ onChange: @escaping @MainActor () -> Void) -> AudioHardwareObservation {
-    let selectors = [kAudioHardwarePropertyDevices, kAudioHardwarePropertyDefaultInputDevice]
-    let listener: AudioObjectPropertyListenerBlock = { _, _ in
-      MainActor.assumeIsolated { onChange() }
-    }
-    for selector in selectors {
+    let key = ListenerRegistry.add(onChange)
+    let context = UnsafeMutableRawPointer(bitPattern: key)
+    for selector in Self.observedSelectors {
       var address = Self.address(selector)
-      AudioObjectAddPropertyListenerBlock(Self.systemObject, &address, .main, listener)
+      AudioObjectAddPropertyListener(Self.systemObject, &address, Self.listenerProc, context)
     }
     return AudioHardwareObservation {
-      for selector in selectors {
+      for selector in Self.observedSelectors {
         var address = Self.address(selector)
-        AudioObjectRemovePropertyListenerBlock(Self.systemObject, &address, .main, listener)
+        AudioObjectRemovePropertyListener(Self.systemObject, &address, Self.listenerProc, context)
+      }
+      DispatchQueue.main.async {
+        MainActor.assumeIsolated { ListenerRegistry.remove(key) }
       }
     }
+  }
+
+  private static let observedSelectors = [
+    kAudioHardwarePropertyDevices, kAudioHardwarePropertyDefaultInputDevice,
+  ]
+
+  private static let listenerProc: AudioObjectPropertyListenerProc = { _, _, _, context in
+    let key = Int(bitPattern: context)
+    DispatchQueue.main.async {
+      MainActor.assumeIsolated { ListenerRegistry.handler(for: key)?() }
+    }
+    return noErr
   }
 
   private func deviceIDs() -> [AudioDeviceID] {
@@ -83,6 +101,28 @@ public struct CoreAudioHardware: AudioHardware {
     var size = UInt32(MemoryLayout<Unmanaged<CFString>?>.size)
     guard AudioObjectGetPropertyData(id, &address, 0, nil, &size, &value) == noErr else { return nil }
     return value?.takeRetainedValue() as String?
+  }
+
+  @MainActor
+  enum ListenerRegistry {
+    private static var handlers: [Int: @MainActor () -> Void] = [:]
+    private static var nextKey = 1
+
+    static var count: Int { handlers.count }
+
+    static func add(_ handler: @escaping @MainActor () -> Void) -> Int {
+      defer { nextKey += 1 }
+      handlers[nextKey] = handler
+      return nextKey
+    }
+
+    static func remove(_ key: Int) {
+      handlers[key] = nil
+    }
+
+    static func handler(for key: Int) -> (@MainActor () -> Void)? {
+      handlers[key]
+    }
   }
 
   private static func address(

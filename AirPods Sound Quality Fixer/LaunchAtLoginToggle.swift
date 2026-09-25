@@ -7,8 +7,11 @@ struct LaunchAtLoginToggle: View {
 
   var body: some View {
     Toggle("Open at login", isOn: Binding(get: { isEnabled }, set: setEnabled))
-      // The user can also change the login item in System Settings while the app runs.
-      .onAppear { isEnabled = Self.isRegistered }
+      // The login item can also change in System Settings while the app runs. MenuBarExtra keeps
+      // its NSMenu between openings, so onAppear does not run on every open.
+      .onReceive(NotificationCenter.default.publisher(for: NSMenu.didBeginTrackingNotification)) { _ in
+        isEnabled = Self.isRegistered
+      }
   }
 
   private func setEnabled(_ enabled: Bool) {

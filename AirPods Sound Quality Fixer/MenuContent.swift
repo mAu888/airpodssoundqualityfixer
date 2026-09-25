@@ -17,6 +17,9 @@ struct MenuContent: View {
       }
     }
     .pickerStyle(.inline)
+    if let failedDevice = fixer.failedDevice {
+      Text("Could not switch the input to \(failedDevice.name)")
+    }
     Divider()
     LaunchAtLoginToggle()
     Divider()

@@ -102,27 +102,18 @@ struct InputFixerTests {
     expectNoDifference(hardware.setDefaultInputCalls, [])
   }
 
-  @Test func migratesLegacyDeviceIDOfConnectedDevice() {
-    defaults.set(Int(AudioDevice.interface.id), forKey: "Device")
-    let hardware = FakeAudioHardware(devices: [.airPods, .builtIn, .interface], defaultInput: AudioDevice.builtIn.id)
+  @Test func reportsDeviceThatCannotBecomeDefaultInput() {
+    let hardware = FakeAudioHardware(devices: [.airPods, .builtIn, .interface], defaultInput: AudioDevice.airPods.id)
+    hardware.rejectedDeviceIDs = [AudioDevice.interface.id]
     let fixer = InputFixer(hardware: hardware, defaults: defaults)
-
     fixer.start()
+    expectNoDifference(fixer.failedDevice, nil)
 
-    expectNoDifference(fixer.forcedDevice, .interface)
-    expectNoDifference(defaults.string(forKey: "ForcedDeviceUID"), AudioDevice.interface.uid)
-    expectNoDifference(defaults.object(forKey: "Device") == nil, true)
-  }
+    fixer.select(.interface)
+    expectNoDifference(fixer.failedDevice, .interface)
+    expectNoDifference(hardware.defaultInput, AudioDevice.builtIn.id)
 
-  @Test func dropsLegacyDeviceIDOfUnknownDevice() {
-    defaults.set(Int(UInt32.max), forKey: "Device")
-    let hardware = FakeAudioHardware(devices: [.airPods, .builtIn], defaultInput: AudioDevice.airPods.id)
-    let fixer = InputFixer(hardware: hardware, defaults: defaults)
-
-    fixer.start()
-
-    expectNoDifference(fixer.forcedDevice, .builtIn)
-    expectNoDifference(defaults.string(forKey: "ForcedDeviceUID"), nil)
-    expectNoDifference(defaults.object(forKey: "Device") == nil, true)
+    fixer.select(.builtIn)
+    expectNoDifference(fixer.failedDevice, nil)
   }
 }
