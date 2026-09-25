@@ -8,3 +8,12 @@ If you have more input devices you can select which device you want to force ove
 The app runs in the menu bar.
 
 Download the compiled application from [releases](https://github.com/milgra/airpodssoundqualityfixer/releases/tag/1.0)
+
+## Building
+
+Requires macOS 14 or later.
+
+Open `AirPodsSoundQualityFixerWorkspace.xcworkspace`, not the `.xcodeproj`.
+The workspace contains the app target and the `AirPodsSoundQualityFixerPackage` Swift package, which holds the CoreAudio and device-forcing logic.
+
+Run the tests with ⌘U in Xcode or `swift test` in `AirPodsSoundQualityFixerPackage`.

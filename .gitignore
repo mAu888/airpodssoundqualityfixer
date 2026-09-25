@@ -63,3 +63,10 @@ fastlane/test_output
 iOSInjectionProject/
 AirPods Sound Quality Fixer.xcodeproj/project.xcworkspace/
 AirPods Sound Quality Fixer.xcodeproj/xcshareddata/
+
+## macOS
+.DS_Store
+
+## Swift Package Manager
+.build/
+.swiftpm/
